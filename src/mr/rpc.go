@@ -29,17 +29,26 @@ type ExampleReply struct {
 type TaskType int
 
 const (
-	MAP = iota
+	WAIT = iota
+	MAP
 	REDUCE
+	DONE
 )
 
 type TaskRequest struct {
+	// Possible value:
+	// * WAIT: initial status, wait MAP/REDUCE task to be done.
+	// * MAP/REDUCE: tell Coordinator to mark MAP/REDUCE task done and decrease their task count.
 	Type  TaskType
 	Id    int
 	Files []string
 }
 
 type TaskReply struct {
+	// Possible value:
+	// * WAIT: wait MAP/REDUCE task to be done.
+	// * MAP/REDUCE: tell Worker to do MAP/REDUCE task.
+	// * DONE: tell Worker to finish job
 	Type    TaskType
 	Id      int
 	NReduce int

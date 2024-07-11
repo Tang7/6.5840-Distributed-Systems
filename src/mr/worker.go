@@ -9,6 +9,7 @@ import (
 	"net/rpc"
 	"os"
 	"sort"
+	"time"
 )
 
 // Map functions return a slice of KeyValue.
@@ -41,6 +42,44 @@ func Worker(mapf func(string, string) []KeyValue,
 	// uncomment to send the Example RPC to the coordinator.
 	// CallExample()
 
+	request := TaskRequest{Type: WAIT}
+	reply := TaskReply{}
+
+	for {
+		reply = SendToCoordinator(&request)
+		switch reply.Type {
+		case MAP:
+			mappedFiles, err := doMap(mapf, &reply)
+			if err != nil {
+				break
+			}
+			// send request to coordinator to mark map task done.
+			request.Id = reply.Id
+			request.Type = MAP
+			request.Files = mappedFiles
+		case REDUCE:
+			reducedFiles := doReduce(reducef, &reply)
+			// send request to coordinator to mark reduce task done.
+			request.Id = reply.Id
+			request.Type = REDUCE
+			request.Files = reducedFiles
+		case WAIT:
+			time.Sleep(500 * time.Millisecond)
+		case DONE:
+			return
+		default:
+			panic(fmt.Sprintf("unknown task type: %v", reply.Type))
+		}
+	}
+}
+
+func SendToCoordinator(request *TaskRequest) TaskReply {
+	reply := TaskReply{}
+	ok := call("Coordinator.Schedule", request, &reply)
+	if !ok {
+		log.Fatal("ask for task failed")
+	}
+	return reply
 }
 
 func doMap(mapf func(string, string) []KeyValue, reply *TaskReply) ([]string, error) {
@@ -99,7 +138,6 @@ func doReduce(reducef func(string, []string) string, reply *TaskReply) []string 
 		for {
 			var kv KeyValue
 			if err := dec.Decode(&kv); err != nil {
-				log.Fatalf("cannot deocde KeyValue, error: %v", err)
 				break
 			}
 			intermediate = append(intermediate, kv)
